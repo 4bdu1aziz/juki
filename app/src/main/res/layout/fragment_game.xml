@@ -8,6 +8,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
+    <!-- Верхняя панель: очки и таймер -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -29,9 +30,18 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="24dp"
             android:layout_weight="1"
-            android:text="Время: 60"
+            android:text="Время: --"
             android:textSize="18sp"
             android:textStyle="bold" />
     </LinearLayout>
+
+    <!-- Кнопка старта — по центру экрана -->
+    <Button
+        android:id="@+id/btnStart"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:text="Начать игру"
+        android:textSize="20sp" />
 
 </FrameLayout>

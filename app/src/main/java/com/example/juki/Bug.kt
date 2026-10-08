@@ -12,8 +12,8 @@ data class Bug(
     val id: Long,
     var x: Float,
     var y: Float,
-    val vx: Float,
-    val vy: Float,
+    var vx: Float,
+    var vy: Float,
     val type: BugType,
     val drawableRes: Int
 ) {

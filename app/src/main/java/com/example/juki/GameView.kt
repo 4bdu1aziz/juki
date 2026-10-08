@@ -17,6 +17,7 @@ class GameView @JvmOverloads constructor(
 
     // Колбэки наружу — во фрагмент
     var onScoreChanged: ((Int) -> Unit)? = null
+    var onTimerChanged: ((Int) -> Unit)? = null
     var onRoundFinished: ((GameStats) -> Unit)? = null
 
     // Настройки, приходят из SettingsFragment
@@ -38,6 +39,7 @@ class GameView @JvmOverloads constructor(
         R.drawable.bug_rare
     )
 
+    private var lastReportedSeconds = -1
     fun startGame() {
         bugs.clear()
         score = 0
@@ -47,6 +49,7 @@ class GameView @JvmOverloads constructor(
         running = true
         lastFrameTime = System.currentTimeMillis()
         onScoreChanged?.invoke(score)
+        onTimerChanged?.invoke(gameSettings.roundDurationSec)
         invalidate()
     }
 
@@ -65,20 +68,23 @@ class GameView @JvmOverloads constructor(
         val dt = (now - lastFrameTime) / 1000f
         lastFrameTime = now
 
-        // Таймер раунда
         roundTimeLeftMs -= (dt * 1000).toLong()
         if (roundTimeLeftMs <= 0) {
             finishRound()
             return
         }
 
-        // Обновление позиций жуков
+        val sec = (roundTimeLeftMs / 1000).toInt()
+        if (sec != lastReportedSeconds) {
+            lastReportedSeconds = sec
+            onTimerChanged?.invoke(sec)
+        }
+
         val speedBase = 0.15f * (gameSettings.speed / 5f)
         for (bug in bugs) {
             bug.x += bug.vx * speedBase * bug.type.speedFactor * dt
             bug.y += bug.vy * speedBase * bug.type.speedFactor * dt
 
-            // Отскок от краёв
             val half = bug.size / 2f
             if (bug.x < half) { bug.x = half; bug.vx = -bug.vx }
             if (bug.x > 1f - half) { bug.x = 1f - half; bug.vx = -bug.vx }
@@ -86,12 +92,10 @@ class GameView @JvmOverloads constructor(
             if (bug.y > 1f - half) { bug.y = 1f - half; bug.vy = -bug.vy }
         }
 
-        // Спавн новых жуков
         if (bugs.size < gameSettings.maxRoaches && Random.nextFloat() < 0.02f) {
             bugs.add(spawnBug())
         }
 
-        // Отрисовка жуков
         for (bug in bugs) {
             val left = (bug.x - bug.size / 2f) * width
             val top = (bug.y - bug.size / 2f) * height
@@ -103,7 +107,6 @@ class GameView @JvmOverloads constructor(
             drawable?.draw(canvas)
         }
 
-        // Запрос следующего кадра
         postInvalidateOnAnimation()
     }
 
