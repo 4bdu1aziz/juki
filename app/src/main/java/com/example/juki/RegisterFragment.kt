@@ -6,6 +6,10 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.*
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
+import com.example.juki.db.AppDatabase
+import com.example.juki.db.PlayerEntity
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -13,44 +17,53 @@ import java.util.Locale
 class RegisterFragment : Fragment() {
 
     private var selectedDate: Calendar = Calendar.getInstance()
+    private lateinit var db: AppDatabase
+    private lateinit var tvCurrentPlayer: TextView
+    private lateinit var listPlayers: ListView
 
-    override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View? = inflater.inflate(R.layout.fragment_register, container, false)
+    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? =
+        inflater.inflate(R.layout.fragment_register, container, false)
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        db = AppDatabase.getInstance(requireContext())
 
-        val spinnerCourse = view.findViewById<Spinner>(R.id.spinnerCourse)
-        val courses = (1..6).map { "$it курс" }
-        spinnerCourse.adapter = ArrayAdapter(
-            requireContext(),
-            android.R.layout.simple_spinner_dropdown_item,
-            courses
-        )
+        tvCurrentPlayer = view.findViewById(R.id.tvCurrentPlayer)
+        listPlayers = view.findViewById(R.id.listPlayers)
 
-        val seekBar = view.findViewById<SeekBar>(R.id.seekBarDifficulty)
-        val tvDifficulty = view.findViewById<TextView>(R.id.tvDifficultyLabel)
-        seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
-                tvDifficulty.text = "Уровень сложности: $progress"
+        refreshCurrentPlayerLabel()
+
+        lifecycleScope.launch {
+            db.playerDao().getAll().collect { players ->
+                val names = players.map { it.fullName }
+                listPlayers.adapter = ArrayAdapter(requireContext(), android.R.layout.simple_list_item_1, names)
+                listPlayers.setOnItemClickListener { _, _, position, _ ->
+                    CurrentPlayer.player = players[position]
+                    refreshCurrentPlayerLabel()
+                }
             }
-            override fun onStartTrackingTouch(sb: SeekBar?) {}
-            override fun onStopTrackingTouch(sb: SeekBar?) {}
-        })
-
-        val calendarView = view.findViewById<CalendarView>(R.id.calendarView)
-        calendarView.setOnDateChangeListener { _, year, month, dayOfMonth ->
-            selectedDate.set(year, month, dayOfMonth)
         }
 
+        // Spinner
+        val spinner = view.findViewById<Spinner>(R.id.spinnerCourse)
+        spinner.adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, (1..6).map { "$it курс" })
+
+        // Календарь
+        view.findViewById<CalendarView>(R.id.calendarView).setOnDateChangeListener { _, y, m, d ->
+            selectedDate.set(y, m, d)
+        }
+
+        // Кнопка регистрации
         view.findViewById<Button>(R.id.btnRegister).setOnClickListener {
-            registerPlayer(view)
+            registerNewPlayer(view)
         }
     }
 
-    private fun registerPlayer(root: View) {
+    private fun refreshCurrentPlayerLabel() {
+        tvCurrentPlayer.text = CurrentPlayer.player?.fullName ?: "Не выбран"
+    }
+
+    private fun registerNewPlayer(root: View) {
         val fullName = root.findViewById<EditText>(R.id.etFullName).text.toString().trim()
         if (fullName.isEmpty()) {
             Toast.makeText(requireContext(), "Введите ФИО", Toast.LENGTH_SHORT).show()
@@ -62,32 +75,25 @@ class RegisterFragment : Fragment() {
             R.id.rbFemale -> "Женский"
             else -> "Не указан"
         }
-
         val course = root.findViewById<Spinner>(R.id.spinnerCourse).selectedItem.toString()
-        val difficulty = root.findViewById<SeekBar>(R.id.seekBarDifficulty).progress
-
-        val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
-        val birthDate = dateFormat.format(selectedDate.time)
-
+        val date = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(selectedDate.time)
         val zodiac = Zodiac.determineSign(selectedDate)
 
-        val player = Player(
-            fullName = fullName,
-            gender = gender,
-            course = course,
-            difficulty = difficulty,
-            birthDate = birthDate,
-            zodiacSign = zodiac.name
-        )
-
         root.findViewById<ImageView>(R.id.ivZodiac).setImageResource(zodiac.drawableRes)
-        root.findViewById<TextView>(R.id.tvResult).text = """
-            ФИО: ${player.fullName}
-            Пол: ${player.gender}
-            Курс: ${player.course}
-            Уровень сложности: ${player.difficulty}
-            Дата рождения: ${player.birthDate}
-            Знак зодиака: ${player.zodiacSign}
-        """.trimIndent()
+
+        lifecycleScope.launch {
+            val id = db.playerDao().insert(
+                PlayerEntity(
+                    fullName = fullName,
+                    gender = gender,
+                    course = course,
+                    birthDate = date,
+                    zodiacSign = zodiac.name
+                )
+            )
+            CurrentPlayer.player = db.playerDao().getById(id)
+            refreshCurrentPlayerLabel()
+            Toast.makeText(requireContext(), "Игрок $fullName зарегистрирован", Toast.LENGTH_SHORT).show()
+        }
     }
 }
