@@ -8,6 +8,10 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.TextView
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
+import com.example.juki.db.AppDatabase
+import com.example.juki.db.ScoreEntity
+import kotlinx.coroutines.launch
 
 class GameFragment : Fragment() {
 
@@ -15,6 +19,7 @@ class GameFragment : Fragment() {
     private lateinit var tvScore: TextView
     private lateinit var tvTimer: TextView
     private lateinit var btnStart: Button
+    private lateinit var db: AppDatabase
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -24,17 +29,27 @@ class GameFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        db = AppDatabase.getInstance(requireContext())
+
         gameView = view.findViewById(R.id.gameView)
         tvScore = view.findViewById(R.id.tvScore)
         tvTimer = view.findViewById(R.id.tvTimer)
         btnStart = view.findViewById(R.id.btnStart)
 
-        gameView.gameSettings = GameSettings(
-            speed = 5,
-            maxRoaches = 10,
-            bonusIntervalSec = 15,
-            roundDurationSec = 60
-        )
+        btnStart.setOnClickListener {
+            val currentSettings = GameSettings(
+                speed = GlobalSettings.speed,
+                maxRoaches = GlobalSettings.maxRoaches,
+                bonusIntervalSec = GlobalSettings.bonusIntervalSec,
+                roundDurationSec = GlobalSettings.roundDurationSec
+            )
+            gameView.gameSettings = currentSettings
+
+
+            btnStart.visibility = View.GONE
+            tvTimer.text = "Время: ${currentSettings.roundDurationSec}"
+            gameView.startGame()
+        }
 
         gameView.onScoreChanged = { score ->
             tvScore.text = "Очки: $score"
@@ -45,13 +60,22 @@ class GameFragment : Fragment() {
         }
 
         gameView.onRoundFinished = { stats ->
+            val current = CurrentPlayer.player
+            if (current != null) {
+                lifecycleScope.launch {
+                    db.scoreDao().insert(
+                        ScoreEntity(
+                            playerId = current.id,
+                            score = stats.score,
+                            hits = stats.hits,
+                            misses = stats.misses,
+                            accuracy = stats.accuracy,
+                            difficulty = gameView.gameSettings.speed
+                        )
+                    )
+                }
+            }
             showGameOverDialog(stats)
-        }
-
-        btnStart.setOnClickListener {
-            btnStart.visibility = View.GONE        // скрыть кнопку
-            tvTimer.text = "Время: ${gameView.gameSettings.roundDurationSec}"
-            gameView.startGame()
         }
 
         tvTimer.text = "Время: --"

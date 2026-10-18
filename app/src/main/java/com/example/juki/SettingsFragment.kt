@@ -38,18 +38,11 @@ class SettingsFragment : Fragment() {
         )
 
         view.findViewById<Button>(R.id.btnSaveSettings).setOnClickListener {
-            val settings = GameSettings(
-                speed = view.findViewById<SeekBar>(R.id.seekSpeed).progress,
-                maxRoaches = view.findViewById<SeekBar>(R.id.seekRoaches).progress,
-                bonusIntervalSec = view.findViewById<SeekBar>(R.id.seekBonus).progress,
-                roundDurationSec = view.findViewById<SeekBar>(R.id.seekRound).progress
-            )
-            Toast.makeText(
-                requireContext(),
-                "Сохранено: скорость ${settings.speed}, тараканов ${settings.maxRoaches}, " +
-                        "бонус ${settings.bonusIntervalSec}с, раунд ${settings.roundDurationSec}с",
-                Toast.LENGTH_LONG
-            ).show()
+            GlobalSettings.speed = view.findViewById<SeekBar>(R.id.seekSpeed).progress
+            GlobalSettings.maxRoaches = view.findViewById<SeekBar>(R.id.seekRoaches).progress
+            GlobalSettings.bonusIntervalSec = view.findViewById<SeekBar>(R.id.seekBonus).progress
+            GlobalSettings.roundDurationSec = view.findViewById<SeekBar>(R.id.seekRound).progress
+
         }
     }
 

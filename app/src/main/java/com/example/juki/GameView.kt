@@ -15,12 +15,10 @@ class GameView @JvmOverloads constructor(
     attrs: AttributeSet? = null
 ) : View(context, attrs) {
 
-    // Колбэки наружу — во фрагмент
     var onScoreChanged: ((Int) -> Unit)? = null
     var onTimerChanged: ((Int) -> Unit)? = null
     var onRoundFinished: ((GameStats) -> Unit)? = null
 
-    // Настройки, приходят из SettingsFragment
     var gameSettings = GameSettings(5, 10, 15, 60)
 
     private val bugs = mutableListOf<Bug>()
@@ -31,15 +29,11 @@ class GameView @JvmOverloads constructor(
     private var lastFrameTime = 0L
     private var running = false
     private var nextId = 0L
+    private var nextSpawnTimeMs = 0L
+    private var lastReportedSeconds = -1
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val bugDrawables = listOf(
-        R.drawable.bug_normal,
-        R.drawable.bug_fast,
-        R.drawable.bug_rare
-    )
 
-    private var lastReportedSeconds = -1
     fun startGame() {
         bugs.clear()
         score = 0
@@ -47,7 +41,10 @@ class GameView @JvmOverloads constructor(
         misses = 0
         roundTimeLeftMs = gameSettings.roundDurationSec * 1000L
         running = true
+        nextSpawnTimeMs = 0L
+        lastReportedSeconds = -1
         lastFrameTime = System.currentTimeMillis()
+
         onScoreChanged?.invoke(score)
         onTimerChanged?.invoke(gameSettings.roundDurationSec)
         invalidate()
@@ -92,8 +89,15 @@ class GameView @JvmOverloads constructor(
             if (bug.y > 1f - half) { bug.y = 1f - half; bug.vy = -bug.vy }
         }
 
-        if (bugs.size < gameSettings.maxRoaches && Random.nextFloat() < 0.02f) {
-            bugs.add(spawnBug())
+        // 3. Спавн новых жуков по таймеру
+        if (bugs.size < gameSettings.maxRoaches) {
+            if (now >= nextSpawnTimeMs) {
+                bugs.add(spawnBug())
+
+                val baseDelay = 1500L - (gameSettings.speed * 100L)
+                val randomDelay = Random.nextLong(0, 500) // + случайная задержка до 0.5 сек
+                nextSpawnTimeMs = now + baseDelay + randomDelay
+            }
         }
 
         for (bug in bugs) {
@@ -124,7 +128,7 @@ class GameView @JvmOverloads constructor(
                 onScoreChanged?.invoke(score)
             } else {
                 misses++
-                score -= 1  // штраф за промах
+                score -= 1
                 onScoreChanged?.invoke(score)
             }
             invalidate()
@@ -138,17 +142,19 @@ class GameView @JvmOverloads constructor(
             Random.nextFloat() < 0.4f -> BugType.FAST
             else -> BugType.NORMAL
         }
+
         val drawableRes = when (type) {
             BugType.NORMAL -> R.drawable.bug_normal
             BugType.FAST -> R.drawable.bug_fast
             BugType.RARE -> R.drawable.bug_rare
         }
+
         return Bug(
             id = nextId++,
-            x = Random.nextFloat().coerceIn(0.15f, 0.85f),
+            x = Random.nextFloat().coerceIn(0.15f, 0.85f), // Чтобы не спавнился прямо в углу
             y = Random.nextFloat().coerceIn(0.15f, 0.85f),
-            vx = if (Random.nextBoolean()) 1f else -1f,
-            vy = if (Random.nextBoolean()) 1f else -1f,
+            vx = if (Random.nextBoolean()) 1f else -1f, // Случайное направление по X
+            vy = if (Random.nextBoolean()) 1f else -1f, // Случайное направление по Y
             type = type,
             drawableRes = drawableRes
         )
@@ -156,6 +162,7 @@ class GameView @JvmOverloads constructor(
 
     private fun finishRound() {
         running = false
+        // Защита от деления на ноль, если игрок вообще не тапал
         val accuracy = if (hits + misses > 0) hits * 100f / (hits + misses) else 0f
         onRoundFinished?.invoke(
             GameStats(
