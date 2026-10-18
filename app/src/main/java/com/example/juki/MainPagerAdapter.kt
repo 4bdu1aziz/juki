@@ -8,12 +8,13 @@ class MainPagerAdapter(activity: FragmentActivity) : FragmentStateAdapter(activi
 
     override fun getItemCount(): Int = 5
 
-    override fun createFragment(position: Int): Fragment = when (position) {
-        0 -> GameFragment()         // игра — первой вкладкой
+    override fun createFragment(position: Int) = when (position) {
+        0 -> GameFragment()
         1 -> RegisterFragment()
-        2 -> RulesFragment()
-        3 -> AuthorsFragment()
-        4 -> SettingsFragment()
+        2 -> RecordsFragment()
+        3 -> RulesFragment()
+        4 -> AuthorsFragment()
+        5 -> SettingsFragment()
         else -> GameFragment()
     }
 }
