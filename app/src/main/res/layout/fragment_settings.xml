@@ -54,19 +54,17 @@
             android:progress="15" />
 
         <TextView
-            android:id="@+id/tvRoundLabel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="Длительность раунда: 60 сек"
+            android:text="Длительность раунда:"
             android:textStyle="bold" />
 
-        <SeekBar
-            android:id="@+id/seekRound"
+        <Spinner
+            android:id="@+id/spinnerRoundTime"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:max="300"
-            android:progress="60" />
+            android:layout_marginTop="4dp" />
 
         <Button
             android:id="@+id/btnSaveSettings"
