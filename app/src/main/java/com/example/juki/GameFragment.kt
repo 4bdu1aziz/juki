@@ -7,6 +7,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.TextView
+import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.example.juki.db.AppDatabase
@@ -36,21 +37,6 @@ class GameFragment : Fragment() {
         tvTimer = view.findViewById(R.id.tvTimer)
         btnStart = view.findViewById(R.id.btnStart)
 
-        btnStart.setOnClickListener {
-            val currentSettings = GameSettings(
-                speed = GlobalSettings.speed,
-                maxRoaches = GlobalSettings.maxRoaches,
-                bonusIntervalSec = GlobalSettings.bonusIntervalSec,
-                roundDurationSec = GlobalSettings.roundDurationSec
-            )
-            gameView.gameSettings = currentSettings
-
-
-            btnStart.visibility = View.GONE
-            tvTimer.text = "Время: ${currentSettings.roundDurationSec}"
-            gameView.startGame()
-        }
-
         gameView.onScoreChanged = { score ->
             tvScore.text = "Очки: $score"
         }
@@ -62,15 +48,19 @@ class GameFragment : Fragment() {
         gameView.onRoundFinished = { stats ->
             val current = CurrentPlayer.player
             if (current != null) {
+                // ИЗМЕНЕНО: Считаем итоговый рейтинг (очки * сложность)
+                val finalRating = stats.score * gameView.gameSettings.speed
+
                 lifecycleScope.launch {
                     db.scoreDao().insert(
                         ScoreEntity(
                             playerId = current.id,
-                            score = stats.score,
+                            score = finalRating, // Сохраняем рейтинг
                             hits = stats.hits,
                             misses = stats.misses,
                             accuracy = stats.accuracy,
-                            difficulty = gameView.gameSettings.speed
+                            difficulty = gameView.gameSettings.speed,
+                            roundDuration = gameView.gameSettings.roundDurationSec // Сохраняем время раунда
                         )
                     )
                 }
@@ -78,15 +68,34 @@ class GameFragment : Fragment() {
             showGameOverDialog(stats)
         }
 
+        btnStart.setOnClickListener {
+            // Передаем актуальные настройки перед стартом
+            val currentSettings = GameSettings(
+                speed = GlobalSettings.speed,
+                maxRoaches = GlobalSettings.maxRoaches,
+                bonusIntervalSec = GlobalSettings.bonusIntervalSec,
+                roundDurationSec = GlobalSettings.roundDurationSec
+            )
+            gameView.gameSettings = currentSettings
+
+            btnStart.visibility = View.GONE
+            tvTimer.text = "Время: ${currentSettings.roundDurationSec}"
+            gameView.startGame()
+        }
+
         tvTimer.text = "Время: --"
         tvScore.text = "Очки: 0"
     }
 
     private fun showGameOverDialog(stats: GameStats) {
+        // В диалоге показываем "чистые" очки и рейтинг
+        val finalRating = stats.score * gameView.gameSettings.speed
+        
         AlertDialog.Builder(requireContext())
             .setTitle("Раунд окончен")
             .setMessage("""
                 Очки: ${stats.score}
+                Рейтинг (Очки × Сложность): $finalRating
                 Попаданий: ${stats.hits}
                 Промахов: ${stats.misses}
                 Точность: ${"%.1f".format(stats.accuracy)}%

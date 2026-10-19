@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [PlayerEntity::class, ScoreEntity::class],
-    version = 1,
+    version = 2, 
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -24,7 +24,9 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "juki.db"
-                ).build().also { INSTANCE = it }
+                )
+                .fallbackToDestructiveMigration() // ИЗМЕНЕНО: сброс БД при смене версии
+                .build().also { INSTANCE = it }
             }
     }
 }

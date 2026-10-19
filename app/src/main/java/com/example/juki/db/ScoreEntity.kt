@@ -23,5 +23,6 @@ data class ScoreEntity(
     val misses: Int,
     val accuracy: Float,
     val difficulty: Int,
+    val roundDuration: Int, // НОВОЕ ПОЛЕ: время раунда в секундах
     val timestamp: Long = System.currentTimeMillis()
 )
