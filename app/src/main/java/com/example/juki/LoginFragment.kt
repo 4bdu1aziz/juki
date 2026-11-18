@@ -81,6 +81,8 @@ class LoginFragment : Fragment() {
 
     private fun loginPlayer(player: PlayerEntity) {
         CurrentPlayer.player = player
+        CurrentPlayer.saveToPrefs(requireContext(), player.id)
+
         Toast.makeText(requireContext(), "С возвращением, ${player.fullName}!", Toast.LENGTH_SHORT).show()
 
         android.util.Log.d("LOGIN_DEBUG", "Игрок выбран, переходим в меню. ID игрока: ${player.id}")
