@@ -22,14 +22,14 @@ class GameView @JvmOverloads constructor(
     attrs: AttributeSet? = null
 ) : View(context, attrs), SensorEventListener {
 
-    var onScoreChanged: ((Int) -> Unit)? = null
+    var onScoreChanged: ((delta: Int) -> Unit)? = null
     var onTimerChanged: ((Int) -> Unit)? = null
     var onRoundFinished: ((GameStats) -> Unit)? = null
 
     var gameSettings = GameSettings(5, 10, 15, 60)
+    var currentScore: Int = 0
 
     private val bugs = mutableListOf<Bug>()
-    private var score = 0
     private var hits = 0
     private var misses = 0
     private var roundTimeLeftMs = 0L
@@ -43,6 +43,8 @@ class GameView @JvmOverloads constructor(
 
     private var currentBonus: Bonus? = null
     private var nextBonusTimeMs = 0L
+    private var nextGoldBugTimeMs = 0L
+
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
     private var tiltX = 0f
@@ -63,7 +65,7 @@ class GameView @JvmOverloads constructor(
     fun startGame() {
         bugs.clear()
         currentBonus = null
-        score = 0
+        currentScore = 0
         hits = 0
         misses = 0
         roundTimeLeftMs = gameSettings.roundDurationSec * 1000L
@@ -74,13 +76,36 @@ class GameView @JvmOverloads constructor(
         lastFrameTime = now
         nextSpawnTimeMs = now
         nextBonusTimeMs = now + 15000L
+        nextGoldBugTimeMs = now + 20000L
         lastReportedSeconds = -1
 
-        onScoreChanged?.invoke(score)
+        onScoreChanged?.invoke(0)
         onTimerChanged?.invoke(gameSettings.roundDurationSec)
 
         sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME)
+        invalidate()
+    }
 
+    fun resumeGame(savedScore: Int, savedTime: Int) {
+        bugs.clear()
+        currentBonus = null
+        currentScore = savedScore
+        hits = 0
+        misses = 0
+        roundTimeLeftMs = savedTime * 1000L
+        running = true
+        isGravityMode = false
+
+        val now = System.currentTimeMillis()
+        lastFrameTime = now
+        nextSpawnTimeMs = now
+        nextBonusTimeMs = now + 15000L
+        nextGoldBugTimeMs = now + 20000L
+        lastReportedSeconds = -1
+
+        onTimerChanged?.invoke(savedTime)
+
+        sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME)
         invalidate()
     }
 
@@ -89,13 +114,12 @@ class GameView @JvmOverloads constructor(
         isGravityMode = false
         bugs.clear()
         currentBonus = null
-        sensorManager.unregisterListener(this) // Отключаем датчик
+        sensorManager.unregisterListener(this)
         invalidate()
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-
         if (!running) return
 
         val now = System.currentTimeMillis()
@@ -121,8 +145,7 @@ class GameView @JvmOverloads constructor(
         val speedBase = 0.15f * (gameSettings.speed / 5f)
         for (bug in bugs) {
             if (isGravityMode) {
-                // Физика наклона (гравитация)
-                bug.x += (tiltX / 5f) * speedBase * dt * 4f
+                bug.x -= (tiltX / 5f) * speedBase * dt * 4f
                 bug.y += (tiltY / 5f) * speedBase * dt * 4f
             } else {
                 bug.x += bug.vx * speedBase * bug.type.speedFactor * dt
@@ -139,11 +162,24 @@ class GameView @JvmOverloads constructor(
         if (bugs.size < gameSettings.maxRoaches) {
             if (now >= nextSpawnTimeMs) {
                 bugs.add(spawnBug())
-
                 val baseDelay = 1500L - (gameSettings.speed * 100L)
                 val randomDelay = Random.nextLong(0, 500)
                 nextSpawnTimeMs = now + baseDelay + randomDelay
             }
+        }
+
+        if (now >= nextGoldBugTimeMs) {
+            val goldBug = Bug(
+                id = nextId++,
+                x = Random.nextFloat().coerceIn(0.15f, 0.85f),
+                y = Random.nextFloat().coerceIn(0.15f, 0.85f),
+                vx = if (Random.nextBoolean()) 1f else -1f,
+                vy = if (Random.nextBoolean()) 1f else -1f,
+                type = BugType.GOLD,
+                drawableRes = R.drawable.bug_gold
+            )
+            bugs.add(goldBug)
+            nextGoldBugTimeMs = now + 20000L
         }
 
         if (currentBonus == null && now >= nextBonusTimeMs) {
@@ -196,7 +232,6 @@ class GameView @JvmOverloads constructor(
                     gravityModeEndTime = System.currentTimeMillis() + 5000L
                     currentBonus = null
                     nextBonusTimeMs = System.currentTimeMillis() + 15000L
-
                     soundPool.play(screamSoundId, 1f, 1f, 0, 0, 1f)
                     invalidate()
                     return true
@@ -206,13 +241,21 @@ class GameView @JvmOverloads constructor(
             val hit = bugs.lastOrNull { it.bounds().contains(tx, ty) }
             if (hit != null) {
                 bugs.remove(hit)
-                score += hit.type.points
+                if (hit.type == BugType.GOLD) {
+                    val prefs = context.getSharedPreferences("game_prefs", Context.MODE_PRIVATE)
+                    val goldRate = prefs.getFloat("gold_rate", 0f)
+                    val pointsToAdd = if (goldRate > 0) (goldRate * 0.01f).toInt() else 50
+                    currentScore += pointsToAdd
+                    onScoreChanged?.invoke(pointsToAdd)
+                } else {
+                    currentScore += hit.type.points
+                    onScoreChanged?.invoke(hit.type.points)
+                }
                 hits++
-                onScoreChanged?.invoke(score)
             } else {
                 misses++
-                score -= 1
-                onScoreChanged?.invoke(score)
+                currentScore -= 1
+                onScoreChanged?.invoke(-1)
             }
             invalidate()
         }
@@ -239,6 +282,7 @@ class GameView @JvmOverloads constructor(
             BugType.NORMAL -> R.drawable.bug_normal
             BugType.FAST -> R.drawable.bug_fast
             BugType.RARE -> R.drawable.bug_rare
+            BugType.GOLD -> R.drawable.bug_gold
         }
 
         return Bug(
@@ -259,7 +303,7 @@ class GameView @JvmOverloads constructor(
         val accuracy = if (hits + misses > 0) hits * 100f / (hits + misses) else 0f
         onRoundFinished?.invoke(
             GameStats(
-                score = score,
+                score = currentScore,
                 hits = hits,
                 misses = misses,
                 accuracy = accuracy

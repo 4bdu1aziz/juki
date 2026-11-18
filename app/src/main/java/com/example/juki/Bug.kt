@@ -5,7 +5,9 @@ import android.graphics.RectF
 enum class BugType(val points: Int, val speedFactor: Float, val sizeFactor: Float) {
     NORMAL(points = 1, speedFactor = 1.0f, sizeFactor = 1.0f),
     FAST(points = 2, speedFactor = 2.0f, sizeFactor = 0.8f),
-    RARE(points = 5, speedFactor = 0.7f, sizeFactor = 1.3f)
+    RARE(points = 5, speedFactor = 0.7f, sizeFactor = 1.3f),
+
+    GOLD(points = 0, speedFactor = 1.5f, sizeFactor = 1.2f)
 }
 
 data class Bug(
